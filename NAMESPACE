@@ -1,0 +1,8 @@
+useDynLib(fosr, .registration=TRUE)
+importFrom(Rcpp, evalCpp)
+importFrom(dsp, initEvolParams)
+importFrom(MASS, mvrnorm)
+importFrom(truncdist, rtrunc)
+import(gibber)
+exportPattern("^[[:alpha:]]+")
+

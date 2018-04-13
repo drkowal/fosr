@@ -1,0 +1,178 @@
+The simulated data from Chen, Goldsmith, Ogden 2016 paper is of the form:
+$y_i(t) = \sum_{j=1}^{p}{x_{ij}\beta_j(t)} + \epsilon_i(t)$ where the first
+$3$ predictor functions are nonzero and the rest are zero. The errors $\epsilon_i(t)$
+are correlated. The function `gen_data_chen_goldsmith_16`
+by default has correlated errors and `p = 20`.
+
+This is what the data from `gen_data_chen_goldsmith_16` looks like:
+
+```{r, echo = FALSE}
+library("fosr", lib.loc = "~/ps/bhdfosr/fosr/bld")
+library("s525", lib.loc = "~/ps/s525/bld") # TODO: don't want dependency
+library(gibber)
+#source("gen_data.R")
+source("misc.R")
+#source("fosr.R")
+library(dsp) # credBands
+library(coda) # plot_curve depends on HPDinterval
+
+datainfo = gen_data_chen_goldsmith_16()
+
+# plot the dataset to see predictors and draws
+par(mfrow = c(1,2))
+plot_spaghetti(datainfo$Y_mean, main = "true mean of the the data")
+xs = seq(0, 1, .01)
+plot(xs, datainfo$beta1(xs), type = "l",
+  ylab = "", xlab = "tau", main = "Nonzero predictor functions",
+  ylim = range(-0.523, 0.0548), col = "blue")
+lines(xs, datainfo$beta2(xs), col = "red")
+lines(xs, datainfo$beta3(xs), col = "green")
+```
+
+The following metrics are used:
+
+* $\hat{c}_j = min_{\alpha}\{\beta_j \in C_{\alpha}(\hat{\beta}_j)\}$, the minimum
+  $\alpha$ level so that the true predictor function is inside the $1-\alpha$ confidence
+  band
+* $MSE$ of the mean of $Y$
+* Integral $MSE$ of the predictor functions
+
+Having low values of $\hat{c}_j$ doesn't necessarily give the better model. But the
+hope is that the prior will induce shrinkage on the zero predictors. But not too much
+shrinkage..
+
+Consider the case where $\alpha$ is given a prior that shrinks along the factor
+dimension and another prior where each element in $\alpha$ is an independent horseshoe.
+```{r, echo = FALSE, eval = TRUE}
+# predictor_est: nMCMC x nM
+# predictor_true: nM vector
+min_alpha_predictor = function(predictor_est, predictor_true)
+{
+  for(alpha in c(0.01, 0.02, 0.03, 0.04, seq(0.05, 0.95, 0.05)))
+  {
+    cb = credBands(predictor_est, 1 - alpha)
+
+    if(all(predictor_true < cb[,2] & predictor_true > cb[,1]))
+      return(alpha)
+  }
+  return(1)
+}
+
+eval_models_chen = function(fs, n_datasets = 10)
+{
+  n_models = length(fs)
+  n_metrics = 1 + 2*4
+
+  ret = array(0, dim = c(n_models, n_metrics))
+
+  for(count_dataset in 1:n_datasets)
+  {
+    datainfo = gen_data_chen_goldsmith_16()
+
+    # don't do this everytime
+    if(count_dataset == 1)
+    {
+      beta1 = datainfo$beta1
+      beta2 = datainfo$beta2
+      beta3 = datainfo$beta3
+      tau = datainfo$tau
+      predictor_true =
+        array(0, c(25, 20))
+      predictor_true[,1:3] =
+        cbind(beta1(tau), beta2(tau), beta3(tau))
+    }
+
+    for(model_idx in 1:n_models)
+    {
+      out = fs[[model_idx]](datainfo)
+
+      rrr = numeric(41)
+
+      post_predictor =
+        calc_post_predictor(out$alpha_pk, out$Fmat)[,,-1]
+      predictor_hat = meanAlong(post_predictor, 1)
+
+      # min alpha for each predictor
+      rrr[1:20] =
+        sapply(1:20, function(j)
+        {
+          min_alpha_predictor(post_predictor[,,j], predictor_true[,j])
+        })
+
+      # integral mse for each predictor
+      rrr[21:40] =
+        colMeans((predictor_true - predictor_hat)^2)
+
+      # MSE for the mean of the data
+      rrr[41] =
+        mean((meanAlong(out$Y_hat, 1) - datainfo$Y)^2)
+
+
+      # accumulate into ret
+      ret[model_idx, 1:3] = ret[model_idx, 1:3] + rrr[1:3]
+      ret[model_idx, 4]   = ret[model_idx, 4]   + sum(rrr[4:20])/17
+      ret[model_idx, 5:7] = ret[model_idx, 5:7] + rrr[21:23]
+      ret[model_idx, 8]   = ret[model_idx, 8]   + sum(rrr[24:40])/17
+      ret[model_idx, 9]   = ret[model_idx, 9]   + rrr[41]
+
+      print(".")
+    }
+
+    print(paste0(count_dataset, "/", n_datasets))
+  }
+
+  # calculate the average
+  ret = ret / n_datasets
+
+  # label the columns and the rows
+  colnames(ret) = c(
+    paste0("pred_alpha_",   c(as.character(1:3), "zeros")),
+    paste0("pred_int_mse_", c(as.character(1:3), "zeros")),
+    "mse_Y")
+  rownames(ret) = names(fs)
+
+  attr(ret, "n sample datasets") <- n_datasets
+
+  ret
+}
+
+gen_model_eval = function(nK = 5, names_f = c("evol_col_shrink", "evol_ind"))
+{
+  ret = lapply(
+    list(
+      gibber_evol_column_horseshoe,
+      gibber_evol_independent_horseshoe),
+    function(f)
+    {
+      f_a = f
+      function(datainfo)
+      {
+        fosr(
+          datainfo$Y,
+          datainfo$tau,
+          datainfo$X,
+          nK, 500, 500, 1,
+          f_gibber_sig_alpha_pk = f_a)
+      }
+    })
+  names(ret) = names_f
+  ret
+}
+
+ooo = eval_models_chen(gen_model_eval(), n_datasets = 5)
+saveRDS(ooo, file = "chen_sim_alpha_100.rds")
+
+## this was run with gibber_evol_column_horseshoe and gibber_evol_independent_horseshoe
+## but with sigma_e = 1/sqrt(nT) not 1/sqrt(nP-1)
+ooo = readRDS("chen_sim_alpha_100.rds")
+ooo
+
+```
+
+(alpha in the output above is referring to significance, not the parameter in
+the model)
+The model that shrinks along the factor dimension gives wider credible bands
+for the true predictors
+than the independent horseshoe model.
+The MSEs perform equally well.
+
