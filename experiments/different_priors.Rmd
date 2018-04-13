@@ -7,7 +7,7 @@ by default has correlated errors and `p = 20`.
 This is what the data from `gen_data_chen_goldsmith_16` looks like:
 
 ```{r, echo = FALSE}
-library("fosr", lib.loc = "~/ps/bhdfosr/fosr/bld")
+library("fosr", lib.loc = "~/ps/fosr/bld")
 library("s525", lib.loc = "~/ps/s525/bld") # TODO: don't want dependency
 library(gibber)
 #source("gen_data.R")
@@ -136,11 +136,14 @@ eval_models_chen = function(fs, n_datasets = 10)
   ret
 }
 
-gen_model_eval = function(nK = 5, names_f = c("evol_col_shrink", "evol_ind"))
+gen_model_eval = function(
+  nK = 5,
+  names_f = c("evol_col_shrink", "evol_row_shrink", "evol_ind"))
 {
   ret = lapply(
     list(
       gibber_evol_column_horseshoe,
+      gibber_evol_row_horseshoe,
       gibber_evol_independent_horseshoe),
     function(f)
     {

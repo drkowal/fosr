@@ -10,7 +10,7 @@ fosr = function(
   nskip = 3,
   mcmc_params = c("Beta", "Y_hat", "Fmat", "alpha_pk"),
   f_gibber_sig_alpha_pk = gibber_evol_column_horseshoe,
-  f_gibber_sig_gamma_tk = gibber_evol_col_row)
+  f_gibber_sig_gamma_tk = gibber_ig_row_mgp_col)
 {
   start_time = Sys.time()
 
