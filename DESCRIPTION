@@ -6,7 +6,7 @@ Date: 2018-04-12
 Author: Daniel Kowal <Daniel.Kowal@rice.edu>
 Maintainer: Daniel Bourgeois <dcb10@rice.edu>
 Description:
-Imports: Rcpp (>= 0.12.14), coda, gglasso, lars, trunncdist
+Imports: Rcpp (>= 0.12.14), coda, gglasso, lars, truncdist
 License: What license is it under?
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 6.0.1

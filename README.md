@@ -9,7 +9,7 @@ Bayesian Function-on-Scalar Regression for High Dimensional Data
 # Example usage
 
 ```
-library(fosr, lib.loc = "~/ps/fosr/fosr/bld")
+library(fosr)
 
 # Simulate some data:
 n = 100
