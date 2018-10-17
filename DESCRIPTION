@@ -1,12 +1,20 @@
 Package: fosr
 Type: Package
-Title: Function-on-Scalars Regression
+Title: Function-on-Scalars Regression for High Dimensional Data
 Version: 1.0
 Date: 2018-04-12
 Author: Daniel Kowal <Daniel.Kowal@rice.edu>
 Maintainer: Daniel Bourgeois <dcb10@rice.edu>
-Description:
+Description: Bayesian inference for function-on-scalars regression,
+    where a functional data response is regressed on scalar predictors. 
+    The functions are modeled nonparametrically using an unknown basis expansion,
+    which is learned from the data. The regression coefficients themselves are functions,
+    and are assigned shrinkage priors to reduce the impact of unimportant predictor variables. 
+    Posterior inference is available via an efficient MCMC algorithm, which is valid and scalable
+    for p > n. For Bayesian variable selection in functional regression, we include two approaches: 
+    (i) a decision-theoertic approach that selects variables jointly and (ii) a Global Bayesian P-value
+    approach based on simulataneous credible bands that selects variables marginally. 
 Imports: Rcpp (>= 0.12.14), coda, gglasso, lars, truncdist
-License: What license is it under?
+License: GPL-3
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 6.0.1
