@@ -3,14 +3,13 @@
 NULL
 
 #' MCMC Sampling Algorithm for the Function-on-Scalars Regression Model
+#' with extra level of hierarchy (for day-specific effects in Actigraphy example)
 #'
-#' Runs the MCMC for the function-on-scalars regression model based on
-#' an FDLM-type expansion. Here we assume the factor regression has independent errors,
-#' which allows for subject-specific random effects,
-#' as well as some additional default conditions.
+#' Let n = sum_i=1,v u_i where u_i is the number of observations for observation i
 #'
-#' @param Y the \code{n x m} data observation matrix, where \code{n} is the number of subjects and \code{m} is the number of observation points (\code{NA}s allowed)
+#' @param Y the \code{n x m} data observation matrix, where \code{m} is the number of observation points (\code{NA}s allowed)
 #' @param tau the \code{m x d} matrix of coordinates of observation points
+#' @param U the \code{n} vector identifying the subject.
 #' @param X the \code{n x p} matrix of predictors; if NULL, only include an intercept
 #' @param K the number of factors; if NULL, use SVD-based proportion of variability explained
 #' @param nsave number of MCMC iterations to record
@@ -36,36 +35,9 @@ NULL
 #'
 #' @note If \code{nm} is large, then storing all posterior samples for \code{Yhat}, which is \code{nsave x n x M},  may be inefficient
 #'
-#' @examples
-#' # Simulate some data:
-#' sim_data = simulate_fosr(n = 100, m = 20, p_0 = 100, p_1 = 5)
-#'
-#' # Data:
-#' Y = sim_data$Y; X = sim_data$X; tau = sim_data$tau
-#'
-#' # Dimensions:
-#' n = nrow(Y); m = ncol(Y); p = ncol(X)
-#'
-#' # Run the FOSR:
-#' out = fosr(Y = Y, tau = tau, X = X, K = 6, mcmc_params = list("fk", "alpha", "Yhat"))
-#'
-#' # Plot a posterior summary of a regression function, say j = 3:
-#' j = 3; post_alpha_tilde_j = get_post_alpha_tilde(out$fk, out$alpha[,j,])
-#' plot_curve(post_alpha_tilde_j, tau = tau)
-#' # Add the true curve:
-#' lines(tau, sim_data$alpha_tilde_true[,j], lwd=6, col='green', lty=6)
-#'
-#' # Plot the loading curves:
-#' plot_flc(out$fk, tau = tau)
-#'
-#' # Plot the fitted values for a random subject:
-#' i = sample(1:n, 1)
-#' plot_fitted(y = Y[i,], mu = colMeans(out$Yhat[,i,]),
-#'             postY = out$Yhat[,i,], y_true = sim_data$Y_true[i,], t01 = tau)
-#'
 #' @import truncdist
 #' @export
-fosr = function(Y, tau, X = NULL, K = NULL,
+day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
                 nsave = 1000, nburn = 1000, nskip = 3,
                 mcmc_params = list("beta", "fk", "alpha", "sigma_e", "sigma_g"),
                 computeDIC = TRUE){
@@ -82,6 +54,30 @@ fosr = function(Y, tau, X = NULL, K = NULL,
 
   # Compute the dimensions:
   n = nrow(Y); m = ncol(Y); d = ncol(tau)
+
+  # Compute the day within subject information
+  subjects = unique(U)
+  subject_mask = sapply(subjects, function(x) U == x)
+  num_days_by_subject = apply(subject_mask, 2, sum)
+  v = length(subjects)
+
+  # Set up day within subject helper functions
+  broadcast <- function(mat) # mat is v x K
+    # returns n x k matrix ret with ret[i,] = mat[u(i),]
+  {
+    ret = array(dim = c(ncol(mat), n))
+    for(u in 1:v)
+    {
+      ret[,subject_mask[,u]] = mat[u,]
+    }
+    return(t(ret))
+  }
+  unbroadcast <- function(mat) # mat is n x K
+    # return v x K matrix ret with ret[u,k] = sum(mat[d(i) == u,k])
+    # while maintaining the order of subjects = unique(U)
+  {
+    rowsum(mat, U, reorder=FALSE)
+  }
 
   # Rescale observation points to [0,1]
   tau01 = apply(tau, 2, function(x) (x - min(x))/(max(x) - min(x)))
@@ -132,6 +128,7 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   #----------------------------------------------------------------------------
   # Initialize the regression terms (and the mean term)
   alpha_pk = matrix(0, nrow = p, ncol = K) # Regression coefficients
+  wega_uk  = matrix(0, nrow = v, ncol = K) # Subject-specific coefficients
   gamma_ik = matrix(0, nrow = n, ncol = K) # Residuals
 
   # Initialize the regression coefficients via sampling (p >= n) or OLS (p < n)
@@ -142,9 +139,14 @@ fosr = function(Y, tau, X = NULL, K = NULL,
                                         alpha = tcrossprod(Y, t(Fmat[,k]))/sigma_e)
     } else alpha_pk[,k] = lm(Beta[,k] ~ X - 1)$coef
 
-    # Residuals:
+    # Let gamma_ik store the residuals for now:
     gamma_ik[,k] = Beta[,k] - X%*%alpha_pk[,k]
   }
+
+  # Split up residuals into wega and gamma components for initialization:
+  wega_uk = unbroadcast(gamma_ik)/num_days_by_subject # average error by subject
+  wega_ik = broadcast(wega_uk)
+  gamma_ik = gamma_ik - wega_ik
 
   # Intercept term:
   mu_k = as.matrix(alpha_pk[1,])
@@ -155,15 +157,28 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   sigma_mu_k = 1/sqrt(cumprod(delta_mu_k))
   #----------------------------------------------------------------------------
   # Initialize the corresponding SD term(s):
+
+  ## For gamma:
   xi_gamma_ik = 1/gamma_ik^2; # Precision scale
   nu = 3  # (initial) degrees of freedom
 
   # MGP term:
   a1_gamma = 2; a2_gamma = 3;
-  delta_gamma_k = rep(1,K); sigma_delta_k = 1/sqrt(cumprod(delta_gamma_k))
+  delta_gamma_k = rep(1,K); .sigma_delta_k = 1/sqrt(cumprod(delta_gamma_k))
 
   # Update the error SD for gamma:
-  sigma_gamma_ik = rep(sigma_delta_k, each = n)/sqrt(xi_gamma_ik)
+  sigma_gamma_ik = rep(.sigma_delta_k, each = n)/sqrt(xi_gamma_ik)
+
+  ## For wega:
+  xi_wega_uk = 1/wega_uk^2; # Precision scale
+  nu = 3  # (initial) degrees of freedom
+
+  # MGP term:
+  a1_wega = 2; a2_wega = 3;
+  delta_wega_k = rep(1,K); .sigma_delta_k = 1/sqrt(cumprod(delta_wega_k))
+
+  # Update the error SD for wega:
+  sigma_wega_uk = rep(.sigma_delta_k, each = v)/sqrt(xi_wega_uk)
   #----------------------------------------------------------------------------
   if(p > 1){
     omega = matrix(alpha_pk[-1,], nrow = p-1) # Not the intercept
@@ -189,6 +204,7 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   if(!is.na(match('alpha', mcmc_params))) post.alpha = array(NA, c(nsave, p, K))
   if(!is.na(match('sigma_e', mcmc_params)) || computeDIC) post.sigma_e = array(NA, c(nsave, 1))
   if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g = array(NA, c(nsave, n, K))
+  if(!is.na(match('sigma_w', mcmc_params))) post.sigma_w = array(NA, c(nsave, v, K))
   if(!is.na(match('gamma', mcmc_params))) post.gamma = array(NA, c(nsave, n, K))
   if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat = array(NA, c(nsave, n, m))
   if(computeDIC) post_loglike = numeric(nsave)
@@ -229,12 +245,15 @@ fosr = function(Y, tau, X = NULL, K = NULL,
     # Step 3: Sample the regression coefficients (and therefore the factors)
     #----------------------------------------------------------------------------
     # Pseudo-response and pseudo-variance:
-    Y_tilde = crossprod(BtY, Psi); sigma_tilde = sigma_et
+
+    Y_tilde = crossprod(BtY, Psi) - wega_ik
+    sigma_tilde = sigma_et
 
     # Draw Separately for each k:
     for(k in 1:K){
       # Marginalize over gamma_{tk} to sample {alpha_pk}_p for fixed k:
-      y_tilde_k = Y_tilde[,k]; sigma_tilde_k = sqrt(sigma_tilde^2 + sigma_gamma_ik[,k]^2)
+      y_tilde_k = Y_tilde[,k]
+      sigma_tilde_k = sqrt(sigma_tilde^2 + sigma_gamma_ik[,k]^2)
 
       if(p >= n){
         # Fast sampler for p >= n (BHATTACHARYA et al., 2016)
@@ -253,11 +272,18 @@ fosr = function(Y, tau, X = NULL, K = NULL,
 
     # And sample the errors gamma_ik:
     postSD = 1/sqrt(rep(1/sigma_tilde^2, times = K) + matrix(1/sigma_gamma_ik^2))
-    postMean = matrix((Y_tilde - X%*%alpha_pk)/rep(sigma_tilde^2, times = K))*postSD^2
+    postMean = matrix((Y_tilde - X%*%alpha_pk - wega_ik)/rep(sigma_tilde^2, times = K))*postSD^2
     gamma_ik = matrix(rnorm(n = n*K, mean = postMean, sd = postSD), nrow = n)
 
+    # And sample the errors wega_uk:
+    sigma_e_v = rep(sigma_e, v)
+    postSD = 1/sqrt(rep(num_days_by_subject/(sigma_e_v^2), times = K) + matrix(1/sigma_wega_uk^2))
+    postMean = matrix(unbroadcast(Y_tilde - X%*%alpha_pk - gamma_ik)/rep(sigma_e_v^2, times = K))*postSD^2
+    wega_uk = matrix(rnorm(n = v*K, mean = postMean, sd = postSD), nrow = v)
+    wega_ik = broadcast(wega_uk)
+
     # Update the factors:
-    Beta = X%*%alpha_pk + gamma_ik
+    Beta = X%*%alpha_pk + gamma_ik + wega_ik
 
     # And the fitted curves:
     Yhat = tcrossprod(Beta, Fmat)
@@ -290,11 +316,11 @@ fosr = function(Y, tau, X = NULL, K = NULL,
     }
 
     # Variance part:
-    # Standardize, then reconstruct as matrix of size n x K:
+    # Standardize, then reconstruct as matrix of size n x K for gamma variance params:
     delta_gamma_k = sampleMGP(theta.jh = matrix(gamma_ik*sqrt(xi_gamma_ik), ncol = K),
                               delta.h = delta_gamma_k,
                               a1 = a1_gamma, a2 = a2_gamma)
-    sigma_delta_k = 1/sqrt(cumprod(delta_gamma_k))
+    sigma_delta_k_gamma = 1/sqrt(cumprod(delta_gamma_k))
     # And hyperparameters:
     if(sample_a1a2){
       a1_gamma = uni.slice(a1_gamma, g = function(a){
@@ -308,7 +334,7 @@ fosr = function(Y, tau, X = NULL, K = NULL,
     # Sample the corresponding prior variance term(s):
     xi_gamma_ik = matrix(rgamma(n = n*K,
                                 shape = nu/2 + 1/2,
-                                rate = nu/2 + (gamma_ik/rep(sigma_delta_k, each = n))^2/2), nrow = n)
+                                rate = nu/2 + (gamma_ik/rep(sigma_delta_k_gamma, each = n))^2/2), nrow = n)
     # Sample degrees of freedom?
     if(sample_nu){
       nu = uni.slice(nu, g = function(nu){
@@ -317,7 +343,37 @@ fosr = function(Y, tau, X = NULL, K = NULL,
     }
 
     # Update the error SD for gamma:
-    sigma_gamma_ik = rep(sigma_delta_k, each = n)/sqrt(xi_gamma_ik)
+    sigma_gamma_ik = rep(sigma_delta_k_gamma, each = n)/sqrt(xi_gamma_ik)
+
+    ###
+    # Standardize, then reconstruct as matrix of size v x K for wega variance params:
+    delta_wega_k = sampleMGP(theta.jh = matrix(wega_uk*sqrt(xi_wega_uk), ncol = K),
+                              delta.h = delta_wega_k,
+                              a1 = a1_wega, a2 = a2_wega)
+    sigma_delta_k_wega = 1/sqrt(cumprod(delta_wega_k))
+    # And hyperparameters:
+    if(sample_a1a2){
+      a1_wega = uni.slice(a1_wega, g = function(a){
+        dgamma(delta_wega_k[1], shape = a, rate = 1, log = TRUE) +
+          dgamma(a, shape = 2, rate = 1, log = TRUE)}, lower = 0, upper = Inf)
+      a2_wega = uni.slice(a2_wega, g = function(a){
+        sum(dgamma(delta_wega_k[-1], shape = a, rate = 1, log = TRUE)) +
+          dgamma(a, shape = 2, rate = 1, log = TRUE)},lower = 0, upper = Inf)
+    }
+
+    # Sample the corresponding prior variance term(s):
+    xi_wega_uk = matrix(rgamma(n = v*K,
+                                shape = nu/2 + 1/2,
+                                rate = nu/2 + (wega_uk/rep(sigma_delta_k_wega, each = v))^2/2), nrow = v)
+    # Sample degrees of freedom?
+    if(sample_nu){
+      nu = uni.slice(nu, g = function(nu){
+        sum(dgamma(xi_wega_uk, shape = nu/2, rate = nu/2, log = TRUE)) +
+          dunif(nu, min = 2, max = 128, log = TRUE)}, lower = 2, upper = 128)
+    }
+
+    # Update the error SD for wega:
+    sigma_wega_uk = rep(sigma_delta_k_wega, each = v)/sqrt(xi_wega_uk)
     #----------------------------------------------------------------------------
     # Step 6: Sample the non-intercept parameters:
     #----------------------------------------------------------------------------
@@ -374,6 +430,7 @@ fosr = function(Y, tau, X = NULL, K = NULL,
         if(!is.na(match('alpha', mcmc_params))) post.alpha[isave,,] = alpha_pk
         if(!is.na(match('sigma_e', mcmc_params)) || computeDIC) post.sigma_e[isave,] = sigma_e
         if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g[isave,,] = sigma_gamma_ik
+        if(!is.na(match('sigma_w', mcmc_params))) post.sigma_w[isave,,] = sigma_wega_uk
         if(!is.na(match('gamma', mcmc_params))) post.gamma[isave,,] = gamma_ik
         if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat[isave,,] = Yhat # + sigma_e*rnorm(length(Y))
         if(computeDIC) post_loglike[isave] = sum(dnorm(matrix(Yna), mean = matrix(Yhat), sd = rep(sigma_et,m), log = TRUE), na.rm = TRUE)
@@ -391,6 +448,7 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   if(!is.na(match('alpha', mcmc_params))) mcmc_output$alpha = post.alpha
   if(!is.na(match('sigma_e', mcmc_params))) mcmc_output$sigma_e = post.sigma_e
   if(!is.na(match('sigma_g', mcmc_params))) mcmc_output$sigma_g = post.sigma_g
+  if(!is.na(match('sigma_w', mcmc_params))) mcmc_output$sigma_w = post.sigma_w
   if(!is.na(match('gamma', mcmc_params))) mcmc_output$gamma = post.gamma
   if(!is.na(match('Yhat', mcmc_params))) mcmc_output$Yhat = post.Yhat
 

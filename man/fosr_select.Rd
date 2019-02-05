@@ -27,7 +27,7 @@ variance explained}
 \item{include_plot}{logical; if TRUE, include a plot showing proportion of variability
 explained against model size}
 
-\item{include_model_list;}{if TRUE, include model_list in return--a boolean matrix
+\item{include_model_list}{logical; if TRUE, include model_list in return--a boolean matrix
 of models of different sizes suggested by DSS}
 }
 \value{

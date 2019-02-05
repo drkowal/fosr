@@ -34,6 +34,8 @@ must be one or more of
 \item "sigma_e" (observation error SD)
 \item "sigma_g" (random effects SD)
 \item "Yhat" (fitted values)
+\item "Psi" (factor loadings)
+\item "gamma" (random error terms)
 }}
 
 \item{computeDIC}{logical; if TRUE, compute the deviance information criterion \code{DIC}
