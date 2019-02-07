@@ -144,7 +144,9 @@ day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
   }
 
   # Split up residuals into wega and gamma components for initialization:
-  wega_uk = unbroadcast(gamma_ik)/num_days_by_subject # average error by subject
+  wega_uk = 0.1*unbroadcast(gamma_ik)/num_days_by_subject
+    # 1/10 of the average error by subject. The 1/10 is added to keep values from
+    # exploding
   wega_ik = broadcast(wega_uk)
   gamma_ik = gamma_ik - wega_ik
 
@@ -206,6 +208,7 @@ day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
   if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g = array(NA, c(nsave, n, K))
   if(!is.na(match('sigma_w', mcmc_params))) post.sigma_w = array(NA, c(nsave, v, K))
   if(!is.na(match('gamma', mcmc_params))) post.gamma = array(NA, c(nsave, n, K))
+  if(!is.na(match('wega', mcmc_params))) post.wega = array(NA, c(nsave, v, K))
   if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat = array(NA, c(nsave, n, m))
   if(computeDIC) post_loglike = numeric(nsave)
 
@@ -432,6 +435,7 @@ day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
         if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g[isave,,] = sigma_gamma_ik
         if(!is.na(match('sigma_w', mcmc_params))) post.sigma_w[isave,,] = sigma_wega_uk
         if(!is.na(match('gamma', mcmc_params))) post.gamma[isave,,] = gamma_ik
+        if(!is.na(match('wega', mcmc_params))) post.wega[isave,,] = gamma_ik
         if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat[isave,,] = Yhat # + sigma_e*rnorm(length(Y))
         if(computeDIC) post_loglike[isave] = sum(dnorm(matrix(Yna), mean = matrix(Yhat), sd = rep(sigma_et,m), log = TRUE), na.rm = TRUE)
 
@@ -450,6 +454,7 @@ day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
   if(!is.na(match('sigma_g', mcmc_params))) mcmc_output$sigma_g = post.sigma_g
   if(!is.na(match('sigma_w', mcmc_params))) mcmc_output$sigma_w = post.sigma_w
   if(!is.na(match('gamma', mcmc_params))) mcmc_output$gamma = post.gamma
+  if(!is.na(match('wega', mcmc_params))) mcmc_output$gamma = post.wega
   if(!is.na(match('Yhat', mcmc_params))) mcmc_output$Yhat = post.Yhat
 
   if(computeDIC){
