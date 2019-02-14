@@ -249,13 +249,13 @@ day_specific_fosr = function(Y, tau, U, X = NULL, K = NULL,
     #----------------------------------------------------------------------------
     # Pseudo-response and pseudo-variance:
 
-    Y_tilde = crossprod(BtY, Psi) - wega_ik
+    Y_tilde = crossprod(BtY, Psi)
     sigma_tilde = sigma_et
 
     # Draw Separately for each k:
     for(k in 1:K){
       # Marginalize over gamma_{tk} to sample {alpha_pk}_p for fixed k:
-      y_tilde_k = Y_tilde[,k]
+      y_tilde_k = Y_tilde[,k] - wega_ik[,k]
       sigma_tilde_k = sqrt(sigma_tilde^2 + sigma_gamma_ik[,k]^2)
 
       if(p >= n){
