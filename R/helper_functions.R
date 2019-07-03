@@ -17,6 +17,9 @@
 #' sample a subset of k=1:K_true factors to be nonzero#'
 #' @param corr correlation parameter for predictors
 #' @param perc_missing percentage of missing data (between 0 and 1); default is zero
+#' @param X the design matrix to use. By default, \code{X} is NULL. When \code{X} is NULL, a design matrix
+#'          is created. If \code{X} is specified, then params \code{p_0}, \code{n} and
+#           \code{corr} are not used.
 #'
 #' @return a list containing the following:
 #' \itemize{
@@ -49,9 +52,21 @@ simulate_fosr = function(n = 100,
                          p_1 = 5,
                          sparse_factors = TRUE,
                          corr = 0,
-                         perc_missing = 0){
+                         perc_missing = 0,
+                         X = NULL)
+{
+  # Whether or not a real design matrix is being used.
+  real_design_matrix = !is.null(X)
+
   # Number of predictors:
-  p = 1 + p_1 + p_0
+  if(real_design_matrix)
+  {
+    p = ncol(X)
+    n = nrow(X)
+    stopifnot(p_0 < p)
+  } else {
+    p = 1 + p_1 + p_0
+  }
 
   # Observation points:
   tau = seq(0, 1, length.out = m)
@@ -61,20 +76,23 @@ simulate_fosr = function(n = 100,
                  poly(tau, K_true - 1))
 
   # Simulate the predictors:
-  Xiid = matrix(rnorm(n = n*(p-1)), nr = n, nc = p-1)
-  if(corr == 0){
-    X = cbind(1,Xiid)
-  } else {
-    # Correlated predictors:
-    ind_mat = matrix(rep(1:(p-1), p-1),nrow=p-1, byrow=FALSE);
-    ind_diffs = abs(ind_mat - t(ind_mat))
-    cov_mat = corr^ind_diffs
-    # Cholesky:
-    ch_cov_mat = chol(cov_mat)
+  if(!real_design_matrix)
+  {
+    Xiid = matrix(rnorm(n = n*(p-1)), nr = n, nc = p-1)
+    if(corr == 0){
+      X = cbind(1,Xiid)
+    } else {
+      # Correlated predictors:
+      ind_mat = matrix(rep(1:(p-1), p-1),nrow=p-1, byrow=FALSE);
+      ind_diffs = abs(ind_mat - t(ind_mat))
+      cov_mat = corr^ind_diffs
+      # Cholesky:
+      ch_cov_mat = chol(cov_mat)
 
-    # Correlated predictors:
-    X = cbind(1,
-              t(crossprod(ch_cov_mat, t(Xiid))))
+      # Correlated predictors:
+      X = cbind(1,
+                t(crossprod(ch_cov_mat, t(Xiid))))
+    }
   }
 
   # True coefficients:
@@ -84,8 +102,8 @@ simulate_fosr = function(n = 100,
   alpha_arr_true[,1] = 1/(1:K_true)
 
   # Simulate the nonzero factors
-  # Nonzero indices: if correlated predictors, space out the true ones
-  nonzero_ind = 1:p_1; if(corr != 0) nonzero_ind = round(seq(1, p-1, length.out = p_1))
+  # Nonzero indices: if correlated predictors, or a real design matrix, space out the true ones
+  nonzero_ind = 1:p_1; if(corr != 0 || real_design_matrix) nonzero_ind = round(seq(1, p-1, length.out = p_1))
   if(p_1 > 0){for(j in nonzero_ind){
     # Which factors are nonzero for predictor j?
     if(sparse_factors){ # Truncated Poisson(1)
