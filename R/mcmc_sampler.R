@@ -23,11 +23,11 @@ NULL
 #' \item "beta" (factors)
 #' \item "fk" (loading curves)
 #' \item "alpha" (regression coefficients)
-#' \item "mu_k" (intercept term for factor k)
 #' \item "sigma_e" (observation error SD)
 #' \item "sigma_g" (random effects SD)
 #' \item "Yhat" (fitted values)
 #' \item "trsigma" (the sum of trace Sigma_i)
+#' \item "sigma_delta_k" (random effects gamma specific SD)
 #' }
 #' @param computeDIC logical; if TRUE, compute the deviance information criterion \code{DIC}
 #' and the effective number of parameters \code{p_d}
@@ -189,6 +189,9 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g = array(NA, c(nsave, n, K))
   if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat = array(NA, c(nsave, n, m))
   if(!is.na(match('trsigma', mcmc_params))) post.trsigma = array(NA, c(nsave))
+  if(!is.na(match('sigma_delta_k', mcmc_params))) post.sigma_delta_k = array(NA, c(nsave, K))
+  if(!is.na(match('nu', mcmc_params))) post.nu = array(NA, c(nsave))
+
   if(computeDIC) post_loglike = numeric(nsave)
 
   # Total number of MCMC simulations:
@@ -373,6 +376,8 @@ fosr = function(Y, tau, X = NULL, K = NULL,
         if(!is.na(match('sigma_g', mcmc_params))) post.sigma_g[isave,,] = sigma_gamma_ik
         if(!is.na(match('Yhat', mcmc_params)) || computeDIC) post.Yhat[isave,,] = Yhat # + sigma_e*rnorm(length(Y))
         if(!is.na(match('trsigma', mcmc_params))) post.trsigma[isave] = n*m*sigma_e^2 + sum(sigma_gamma_ik^2)
+        if(!is.na(match('sigma_delta_k', mcmc_params))) post.sigma_delta_k[isave,] = sigma_delta_k
+        if(!is.na(match('nu', mcmc_params))) post.nu[isave] = nu
         if(computeDIC) post_loglike[isave] = sum(dnorm(matrix(Yna), mean = matrix(Yhat), sd = rep(sigma_et,m), log = TRUE), na.rm = TRUE)
 
         # And reset the skip counter:
@@ -389,6 +394,8 @@ fosr = function(Y, tau, X = NULL, K = NULL,
   if(!is.na(match('sigma_g', mcmc_params))) mcmc_output$sigma_g = post.sigma_g
   if(!is.na(match('Yhat', mcmc_params))) mcmc_output$Yhat = post.Yhat
   if(!is.na(match('trsigma', mcmc_params))) mcmc_output$trsigma = post.trsigma
+  if(!is.na(match('sigma_delta_k', mcmc_params))) mcmc_output$sigma_delta_k = post.sigma_delta_k
+  if(!is.na(match('nu', mcmc_params))) mcmc_output$nu = post.nu
 
   if(computeDIC){
     # Log-likelihood evaluated at posterior means:

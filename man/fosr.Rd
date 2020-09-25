@@ -4,9 +4,17 @@
 \alias{fosr}
 \title{MCMC Sampling Algorithm for the Function-on-Scalars Regression Model}
 \usage{
-fosr(Y, tau, X = NULL, K = NULL, nsave = 1000, nburn = 1000,
-  nskip = 3, mcmc_params = list("beta", "fk", "alpha", "sigma_e",
-  "sigma_g"), computeDIC = TRUE)
+fosr(
+  Y,
+  tau,
+  X = NULL,
+  K = NULL,
+  nsave = 1000,
+  nburn = 1000,
+  nskip = 3,
+  mcmc_params = list("beta", "fk", "alpha", "sigma_e", "sigma_g", "trsigma"),
+  computeDIC = TRUE
+)
 }
 \arguments{
 \item{Y}{the \code{n x m} data observation matrix, where \code{n} is the number of subjects and \code{m} is the number of observation points (\code{NA}s allowed)}
@@ -30,10 +38,11 @@ must be one or more of
 \item "beta" (factors)
 \item "fk" (loading curves)
 \item "alpha" (regression coefficients)
-\item "mu_k" (intercept term for factor k)
 \item "sigma_e" (observation error SD)
 \item "sigma_g" (random effects SD)
 \item "Yhat" (fitted values)
+\item "trsigma" (the sum of trace Sigma_i)
+\item "sigma_delta_k" (random effects gamma specific SD)
 }}
 
 \item{computeDIC}{logical; if TRUE, compute the deviance information criterion \code{DIC}

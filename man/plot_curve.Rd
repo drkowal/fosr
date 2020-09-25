@@ -4,8 +4,13 @@
 \alias{plot_curve}
 \title{Plot a curve given posterior samples}
 \usage{
-plot_curve(post_f, tau = NULL, alpha = 0.05, include_joint = TRUE,
-  main = "Posterior Mean and Credible Bands")
+plot_curve(
+  post_f,
+  tau = NULL,
+  alpha = 0.05,
+  include_joint = TRUE,
+  main = "Posterior Mean and Credible Bands"
+)
 }
 \arguments{
 \item{post_f}{\code{Ns x m} matrix of \code{Ns} posterior simulations

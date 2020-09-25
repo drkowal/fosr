@@ -2,6 +2,7 @@
 
 export(fosr)
 export(fosr_gbpv)
+export(fosr_predict)
 export(fosr_select)
 export(get_post_alpha_tilde)
 export(plot_curve)

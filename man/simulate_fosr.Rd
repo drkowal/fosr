@@ -4,8 +4,18 @@
 \alias{simulate_fosr}
 \title{Simulate a function-on-scalar regression model}
 \usage{
-simulate_fosr(n = 100, m = 50, RSNR = 5, K_true = 4, p_0 = 1000,
-  p_1 = 5, sparse_factors = TRUE, corr = 0, perc_missing = 0)
+simulate_fosr(
+  n = 100,
+  m = 50,
+  RSNR = 5,
+  K_true = 4,
+  p_0 = 1000,
+  p_1 = 5,
+  sparse_factors = TRUE,
+  corr = 0,
+  perc_missing = 0,
+  X = NULL
+)
 }
 \arguments{
 \item{n}{number of observed curves (i.e., number of subjects)}
@@ -26,6 +36,9 @@ sample a subset of k=1:K_true factors to be nonzero#'}
 \item{corr}{correlation parameter for predictors}
 
 \item{perc_missing}{percentage of missing data (between 0 and 1); default is zero}
+
+\item{X}{the design matrix to use. By default, \code{X} is NULL. When \code{X} is NULL, a design matrix
+is created. If \code{X} is specified, then params \code{p_0}, \code{n} and}
 }
 \value{
 a list containing the following:

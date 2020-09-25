@@ -17,4 +17,4 @@ Description: Bayesian inference for function-on-scalars regression,
 Imports: Rcpp (>= 0.12.14), coda, gglasso, lars, truncdist
 License: GPL-3
 LinkingTo: Rcpp, RcppArmadillo
-RoxygenNote: 6.0.1
+RoxygenNote: 7.1.0

@@ -4,9 +4,16 @@
 \alias{fosr_select}
 \title{Decoupling shrinkage and selection for function-on-scalars regression}
 \usage{
-fosr_select(X, post_alpha, post_trace_sigma_2, weighted = TRUE,
-  alpha_level = 0.1, remove_int = TRUE, include_plot = TRUE,
-  include_model_list = FALSE)
+fosr_select(
+  X,
+  post_alpha,
+  post_trace_sigma_2,
+  weighted = TRUE,
+  alpha_level = 0.1,
+  remove_int = TRUE,
+  include_plot = TRUE,
+  include_model_list = FALSE
+)
 }
 \arguments{
 \item{X}{\code{n x p} matrix of predictors}
@@ -27,7 +34,7 @@ variance explained}
 \item{include_plot}{logical; if TRUE, include a plot showing proportion of variability
 explained against model size}
 
-\item{include_model_list;}{if TRUE, include model_list in return--a boolean matrix
+\item{include_model_list}{logical; if TRUE, include model_list in return--a boolean matrix
 of models of different sizes suggested by DSS}
 }
 \value{

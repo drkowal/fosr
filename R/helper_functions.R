@@ -137,6 +137,125 @@ simulate_fosr = function(n = 100,
        Y_true = Y_true, alpha_tilde_true = alpha_tilde_true,
        alpha_arr_true = alpha_arr_true, Beta_true = Beta_true, F_true = F_true, sigma_true = sigma_true)
 }
+
+#----------------------------------------------------------------------------
+#' We have that
+#'   Y_i(t) = sum(x_{ij} * alpha_tilde_j(t)) +
+#'            gamma_tilde_i(t) +
+#'            eps_i(t)
+#' This function tries to return the three components above for a new input dataset X.
+#'
+#' To get gamma_tilde, \gamma_{k,i} is simulated from it's predictive distribution
+#' using post_sigma_delta_k and post_nu. If post_sigma_delta_k is not provided, it is not sampled.
+#'
+#' eps_i is just white noise with standard deviations from post_sigma_e. If post_sigma_e
+#' is not provded, it is not sampled.
+#' @param X a new input dataset to predict from
+#' @param post_fk mcmc samples from param fk
+#' @param post_alpha mcmc samples from param alpha
+#' @param post_sigma_delta_k mcmc samples from param sigma_delta_k
+#' @param post_nu mcmc samples from param nu
+#' @param post_sigma_e mcmc samples from param sigma_e
+#' @return a list containing the following:
+#' \itemize{
+#' \item \code{mean}: the posterior mean; the first term
+#' \item \code{gammaTilde}: the predictive random effects term; the second term
+#' \item \code{epsOut}: white noise of the right shape simulated from sigma_e
+#' }
+#'
+#' @note
+#'
+#' @examples
+#' library(fosr)
+#'
+#' # Simulate some data:
+#' n = 100
+#' m = 20
+#' p_0 = 100
+#' p_1 = 5
+#' sim_data  = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
+#' sim_data2 = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
+#'
+#' # Data:
+#' Y = sim_data$Y
+#' X = sim_data$X
+#' X2 = sim_data2$X
+#' tau = sim_data$tau
+#'
+#' # Dimensions:
+#' n = nrow(Y)
+#' m = ncol(Y)
+#' p = ncol(X)
+#'
+#' # Run the FOSR:
+#' out = fosr(
+#'   Y = Y,
+#'   tau = tau,
+#'   X = X,
+#'   K = 6,
+#'   mcmc_params = list("fk", "alpha", "Yhat", "sigma_e", "sigma_g", "sigma_delta_k", "nu"))
+#'
+#' YPredictInfo = fosr_predict(X, out$fk, out$alpha, out$sigma_delta_k, out$nu, out$sigma_e)
+#'
+#' i = sample(1:n, 1)
+#'
+#' YPredict = YPredictInfo$mean + YPredictInfo$gammaTilde
+#'
+#' plot_fitted(y = sim_data$Y[i,], mu = colMeans(YPredictInfo$mean[,i,]),
+#'             postY = YPredict[,i,], y_true = sim_data$Y_true[i,], t01 = sim_data$tau)
+#'
+#'
+#' @export
+fosr_predict = function(X, post_fk, post_alpha, post_sigma_delta_k=NULL, post_nu=NULL, post_sigma_e=NULL) {
+    # add the intercept to X
+    nN = dim(X)[1]
+
+    nSim = dim(post_fk)[1]
+    nP = dim(post_alpha)[2]
+    nM = dim(post_fk)[2]
+
+    # fill out post_alpha_tilde
+    post_alpha_tilde = array(0, dim=c(nSim, nP, nM))
+    for(j in 1:nP) {
+        post_alpha_tilde[,j,] = get_post_alpha_tilde(post_fk, post_alpha[,j,])
+    }
+
+    # XWithIntercept: (nN, nP), post_alpha_tilde: (nSim, nP, nM)
+    # In einsum notation, MeanOut = einsum("ij,rjm->rim", X, post_alpha_tilde)
+    # Instead of einsum, settle for messy for loops
+    out = list()
+    out$mean = array(0, dim=c(nSim, nN, nM))
+
+    for(r in 1:nSim) {
+        out$mean[r,,] = X %*% post_alpha_tilde[r,,]
+    }
+
+    if(!is.null(post_sigma_delta_k) && !is.null(post_nu)) {
+        nK = dim(post_sigma_delta_k)[2]
+
+        out$gammaTilde = array(0, dim=c(nSim, nN, nM))
+        for(r in 1:nSim) {
+            nu = post_nu[r]
+            gamma_ik = array(rgamma(nN*nK, shape = nu/2, rate = nu/2), dim=c(nN, nK))
+            sigma_v = t(array(rep(post_sigma_delta_k[r], nN), dim=c(nK, nN))) / gamma_ik
+
+            # array(rnorm(nN*nK, sd=sigma_v), dim=c(nN,nK))
+            # (nN, nK) * (nM, nK)
+
+            out$gammaTilde[r,,] = tcrossprod(array(rnorm(nN*nK, sd=sigma_v), dim=c(nN,nK)), post_fk[r,,])
+        }
+    }
+
+    if(!is.null(post_sigma_e)) {
+        out$epsOut = array(0, dim=c(nSim, nN, nM))
+        for(r in 1:nSim) {
+            out$epsOut[r,,] = rnorm(nN*nM, sd=post_sigma_e[r])
+        }
+    }
+
+    return(out)
+}
+
 #----------------------------------------------------------------------------
 # Initialize the factors and FLCs using a SVD
   # Inputs: Y, tau, K (see fdlm() for details)
