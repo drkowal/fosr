@@ -160,7 +160,7 @@ simulate_fosr = function(n = 100,
 #' \itemize{
 #' \item \code{mean}: the posterior mean; the first term
 #' \item \code{gammaTilde}: the predictive random effects term; the second term
-#' \item \code{epsOut}: white noise of the right shape simulated from sigma_e
+#' \item \code{eps}: white noise of the right shape simulated from sigma_e
 #' }
 #'
 #' @note
@@ -174,12 +174,10 @@ simulate_fosr = function(n = 100,
 #' p_0 = 100
 #' p_1 = 5
 #' sim_data  = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
-#' sim_data2 = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
 #'
 #' # Data:
 #' Y = sim_data$Y
 #' X = sim_data$X
-#' X2 = sim_data2$X
 #' tau = sim_data$tau
 #'
 #' # Dimensions:
@@ -199,11 +197,10 @@ simulate_fosr = function(n = 100,
 #'
 #' i = sample(1:n, 1)
 #'
-#' YPredict = YPredictInfo$mean + YPredictInfo$gammaTilde
+#' YPredict = YPredictInfo$mean + YPredictInfo$gammaTilde + YPredictInfo$eps
 #'
 #' plot_fitted(y = sim_data$Y[i,], mu = colMeans(YPredictInfo$mean[,i,]),
 #'             postY = YPredict[,i,], y_true = sim_data$Y_true[i,], t01 = sim_data$tau)
-#'
 #'
 #' @export
 fosr_predict = function(X, post_fk, post_alpha, post_sigma_delta_k=NULL, post_nu=NULL, post_sigma_e=NULL) {
@@ -247,9 +244,9 @@ fosr_predict = function(X, post_fk, post_alpha, post_sigma_delta_k=NULL, post_nu
     }
 
     if(!is.null(post_sigma_e)) {
-        out$epsOut = array(0, dim=c(nSim, nN, nM))
+        out$eps = array(0, dim=c(nSim, nN, nM))
         for(r in 1:nSim) {
-            out$epsOut[r,,] = rnorm(nN*nM, sd=post_sigma_e[r])
+            out$eps[r,,] = rnorm(nN*nM, sd=post_sigma_e[r])
         }
     }
 

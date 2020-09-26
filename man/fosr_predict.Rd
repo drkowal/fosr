@@ -35,7 +35,7 @@ a list containing the following:
 \itemize{
 \item \code{mean}: the posterior mean; the first term
 \item \code{gammaTilde}: the predictive random effects term; the second term
-\item \code{epsOut}: white noise of the right shape simulated from sigma_e
+\item \code{eps}: white noise of the right shape simulated from sigma_e
 }
 }
 \description{
@@ -58,12 +58,10 @@ m = 20
 p_0 = 100
 p_1 = 5
 sim_data  = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
-sim_data2 = simulate_fosr(n = n, m = m, p_0 = p_0, p_1 = p_1)
 
 # Data:
 Y = sim_data$Y
 X = sim_data$X
-X2 = sim_data2$X
 tau = sim_data$tau
 
 # Dimensions:
@@ -83,10 +81,9 @@ YPredictInfo = fosr_predict(X, out$fk, out$alpha, out$sigma_delta_k, out$nu, out
 
 i = sample(1:n, 1)
 
-YPredict = YPredictInfo$mean + YPredictInfo$gammaTilde
+YPredict = YPredictInfo$mean + YPredictInfo$gammaTilde + YPredictInfo$eps
 
 plot_fitted(y = sim_data$Y[i,], mu = colMeans(YPredictInfo$mean[,i,]),
             postY = YPredict[,i,], y_true = sim_data$Y_true[i,], t01 = sim_data$tau)
-
 
 }
